@@ -1,7 +1,9 @@
 //! Implementation of a streaming serializer for Turtle.
 
 use super::Turtle;
-use crate::serialize::{config::Config, Error, Result, Serializable};
+use crate::error::{Error, Result};
+use crate::serialize::Config;
+use crate::serialize::Serializable;
 use sophia::term::{Term, TermData};
 use sophia::triple::{
     stream::{SinkError, SourceError, StreamError},

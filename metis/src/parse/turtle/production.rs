@@ -1,7 +1,8 @@
 //! Production rules of Turtle.
 
 use super::{terminals::*, Context, CowTerm};
-use crate::parse::util::parse_regex;
+use crate::parse::{parse_regex, unwrap_str};
+use crate::collections::*;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, tag_no_case};
 use nom::combinator::{map, map_opt, opt};
@@ -12,88 +13,19 @@ use sophia::ns::{rdf, xsd};
 use sophia::term::Term;
 use std::borrow::Cow;
 use std::cell::RefCell;
+use crate::Turtle;
 
 /// A context wrapped in a RefCell.
 ///
 /// This is necessary due to the constraints of `nom`'s parser generators (they
 /// only take `Fn`).
-pub type RefContext<'a> = RefCell<Context<'a>>;
-
-/// A list of RDF terms
-pub type TermList<'a> = Vec<CowTerm<'a>>;
-
-/// A predicate with a list of objects
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PoList<'a> {
-    predicate: CowTerm<'a>,
-    objects: TermList<'a>,
-}
-
-impl<'a> PoList<'a> {
-    /// Creates a new PO-list from a predicate and a list of objects.
-    pub fn new(predicate: CowTerm<'a>, objects: TermList<'a>) -> Self {
-        Self { predicate, objects }
-    }
-    /// Returns the list of predicates and objects.
-    ///
-    /// This consumes the list. For each pair the predicate is copied.
-    #[allow(clippy::should_implement_trait)] // TODO: Implement IntoIterator
-    pub fn into_iter(self) -> impl Iterator<Item = (CowTerm<'a>, CowTerm<'a>)> {
-        let p = self.predicate;
-        self.objects.into_iter().map(move |o| (p.clone(), o))
-    }
-    /// Returns the list of predicates and objects by reference.
-    pub fn iter(&self) -> impl Iterator<Item = (&CowTerm<'a>, &CowTerm<'a>)> {
-        self.objects.iter().map(move |o| (&self.predicate, o))
-    }
-}
-
-/// A subject with a list of predicate-object-lists
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpoList<'a> {
-    subject: CowTerm<'a>,
-    po_lists: Vec<PoList<'a>>,
-}
-
-impl<'a> SpoList<'a> {
-    /// Creates a new PO-list from a predicate and a list of objects.
-    pub fn new(subject: CowTerm<'a>, po_lists: Vec<PoList<'a>>) -> Self {
-        Self { subject, po_lists }
-    }
-    /// Returns the list of subject, predicates and objects.
-    ///
-    /// This consumes the list. For each triple the subject and predicate are
-    /// copied!
-    #[allow(clippy::should_implement_trait)] // TODO: Implement IntoIterator
-    pub fn into_iter(self) -> impl Iterator<Item = [CowTerm<'a>; 3]> {
-        let s_outer = self.subject;
-        self.po_lists
-            .into_iter()
-            .map(move |pol| {
-                let s = s_outer.clone();
-                pol.into_iter().map(move |(p, o)| [s.clone(), p, o])
-            })
-            .flatten()
-    }
-    /// Returns the list of subject, predicates and objects by reference.
-    pub fn iter(&self) -> impl Iterator<Item = [&CowTerm<'a>; 3]> {
-        self.po_lists
-            .iter()
-            .map(move |pol| pol.iter().map(move |(p, o)| [&self.subject, p, o]))
-            .flatten()
-    }
-}
+pub type RefContext<'a> = RefCell<Context<'a, Turtle>>;
 
 /// Apply the escape sequences of UCHAR and ECHAR
 ///
 /// TODO: implement
 fn escape(i: &str) -> Cow<'_, str> {
     i.into()
-}
-
-#[inline]
-fn unwrap_str(i: &str, margin: usize) -> &str {
-    &i[margin..i.len() - margin]
 }
 
 /// Parses Turtle's production
@@ -201,7 +133,7 @@ pub fn prefix_id<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, ()> {
 
 /// Parses Turtle's production
 /// [6] triples ::= subject predicateObjectList | blankNodePropertyList predicateObjectList?
-pub fn triples<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, SpoList<'a>> {
+pub fn triples<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, SpoList<'a, Turtle>> {
     alt((
         map(
             tuple((
@@ -234,7 +166,7 @@ pub fn triples<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, SpoList
 pub fn predicate_object_list<'a>(
     i: &'a str,
     ctx: &RefContext<'a>,
-) -> IResult<&'a str, Vec<PoList<'a>>> {
+) -> IResult<&'a str, Vec<PoList<'a, Turtle>>> {
     separated_list(
         tuple((multispace0, tag(";"), multispace0)),
         map(
@@ -246,7 +178,7 @@ pub fn predicate_object_list<'a>(
 
 /// Parses Turtle's production
 /// [8] objectList ::= object (',' object)*
-pub fn object_list<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, TermList<'a>> {
+pub fn object_list<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, TermList<'a, Turtle>> {
     separated_list(tuple((multispace0, tag(","), multispace0)), |i| {
         object(i, ctx)
     })(i)
@@ -312,7 +244,7 @@ pub fn literal<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, CowTerm
 pub fn blank_node_property_list<'a>(
     i: &'a str,
     ctx: &RefContext<'a>,
-) -> IResult<&'a str, Vec<PoList<'a>>> {
+) -> IResult<&'a str, Vec<PoList<'a, Turtle>>> {
     let (rest, _) = tag("[")(i)?;
     let (rest, _) = multispace0(rest)?;
     let (rest, contents) = predicate_object_list(rest, ctx)?;
@@ -486,16 +418,7 @@ mod test {
     use test_case::test_case;
 
     fn ctx<'a>() -> RefContext<'a> {
-        let mut ctx = Context::default();
-        ctx.prolog.add_default_prefixes();
-        RefCell::new(ctx)
-    }
-
-    #[test_case("12345a54321", 0 => "12345a54321" ; "margin 0")]
-    #[test_case("12345a54321", 1 =>  "2345a5432" ; "margin 1")]
-    #[test_case("12345a54321", 2 =>   "345a543" ; "margin 2")]
-    fn check_unwrap_str(i: &str, margin: usize) -> &str {
-        unwrap_str(i, margin)
+        RefCell::new(Context::with_default_prefixes())
     }
 
     #[test]

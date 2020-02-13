@@ -26,13 +26,12 @@ mod test_suite;
 
 use self::production::statement;
 use self::terminals::multispace0;
-use super::Turtle;
-use crate::common::Prolog;
+use crate::Turtle;
 use crate::error::{Error, Result};
+use crate::parse::Context;
 use sophia::term::Term;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::VecDeque;
 
 /// Shortcut for `Term<Cow<'a, str>>`.
 pub type CowTerm<'a> = Term<Cow<'a, str>>;
@@ -40,7 +39,7 @@ pub type CowTerm<'a> = Term<Cow<'a, str>>;
 /// The Turtle parser that parses a document step by step.
 pub struct Parser<'a> {
     /// Gathered metadata.
-    ctx: RefCell<Context<'a>>,
+    ctx: RefCell<Context<'a, Turtle>>,
     /// Current position within the document.
     current: &'a str,
     /// true if the parser failed once of is at EOF.
@@ -113,46 +112,6 @@ impl<'a> Iterator for Parser<'a> {
         self.current = rest;
 
         self.next()
-    }
-}
-
-/// The current context of the parser.
-#[derive(Debug, Default)]
-pub struct Context<'a> {
-    /// Prefixes and Base
-    prolog: Prolog<Turtle, Cow<'a, str>>,
-    /// Number of parsed blank nodes. Used for naming anonymous nodes.
-    bnode_cnt: usize,
-    /// When a list is parsed its surrounding block is parsed first. The
-    /// list's triples are stored and returned afterwards.
-    triple_stack: VecDeque<[CowTerm<'a>; 3]>,
-}
-
-impl<'a> Context<'a> {
-    fn new_labeled_bnode(&mut self, label: &'a str) -> CowTerm<'a> {
-        self.bnode_cnt += 1;
-        unsafe { Term::new_bnode_unchecked(label) }
-    }
-    fn new_anon_bnode(&mut self) -> CowTerm<'a> {
-        let bn = unsafe { Term::new_bnode_unchecked(format!("anon{}", self.bnode_cnt)) };
-        self.bnode_cnt += 1;
-        bn
-    }
-    fn new_iri(&self, iri: &'a str) -> CowTerm<'a> {
-        if let Some(base) = &self.prolog.base {
-            unsafe { Term::new_iri2_unchecked(base.clone(), iri, None) }
-        } else {
-            unsafe { Term::new_iri_unchecked(iri, None) }
-        }
-    }
-    fn pop_triple(&mut self) -> Option<[CowTerm<'a>; 3]> {
-        self.triple_stack.pop_front()
-    }
-    fn push_triple(&mut self, triple: [CowTerm<'a>; 3]) {
-        self.triple_stack.push_back(triple)
-    }
-    fn push_triples(&mut self, src: impl Iterator<Item = [CowTerm<'a>; 3]>) {
-        self.triple_stack.extend(src);
     }
 }
 

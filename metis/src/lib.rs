@@ -12,4 +12,6 @@ pub mod serialize;
 pub mod n3;
 pub mod turtle;
 
-pub use self::common::Format;
+pub use self::common::*;
+pub use self::turtle::Turtle;
+pub use self::n3::N3;

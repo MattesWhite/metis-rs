@@ -1,15 +1,11 @@
 //! Serialization in Turtle format.
 
-pub mod parse;
-pub mod serialize;
-
-use crate::common::Prolog;
 use crate::Format;
-use sophia::term::TermData;
-use std::io;
+use crate::common::{Valid, RdfTerm};
+use sophia::term::{Term, TermData};
 
 /// Type level representation of the [Turtle serialization](https://www.w3.org/TR/turtle/).
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Turtle;
 
 impl Format for Turtle {
@@ -19,35 +15,39 @@ impl Format for Turtle {
     // validation functions are default impl.
 }
 
-impl Turtle {
-    /// Write the preamble according to the `prolog` to the target.
-    #[allow(clippy::useless_let_if_seq)]
-    pub fn write_preamble<TD, T>(prolog: &Prolog<Self, TD>, target: &mut T) -> io::Result<()>
+impl<TD: TermData + std::fmt::Debug> Valid<TD> for Turtle {
+    type Term = Term<TD>;
+}
+
+impl<TD: TermData + std::fmt::Debug> RdfTerm<TD> for Term<TD> {
+    fn new_iri<U>(iri: U) -> Self 
     where
-        TD: TermData,
-        T: io::Write,
+        TD: From<U>
     {
-        // this is more clear than clippy's suggestion
-        let mut wrote_something = false;
-
-        if !prolog.prefixes.is_empty() {
-            prolog
-                .prefixes
-                .iter()
-                .map(|(p, ns)| writeln!(target, "@prefix {}: <{}> .", p.as_ref(), ns.as_ref()))
-                .collect::<io::Result<Vec<()>>>()?;
-            wrote_something = true;
-        }
-
-        if let Some(base) = &prolog.base {
-            writeln!(target, "@base <{}> .", base.as_ref())?;
-            wrote_something = true;
-        }
-
-        if wrote_something {
-            writeln!(target)?;
-        }
-
-        Ok(())
+        Term::new_iri(iri).unwrap()
+    }
+    fn new_iri2<U, V>(ns: U, suffix: V) -> Self 
+    where
+        TD: From<U> + From<V>
+    {
+        Term::new_iri2(ns, suffix).unwrap()
+    }
+    fn new_blank_node<U>(label: U) -> Self 
+    where
+        TD: From<U>
+    {
+        Term::new_bnode(label).unwrap()
+    }
+    fn new_literal_dt<U>(txt: U, dt: Self) -> Self 
+    where
+        TD: From<U>
+    {
+        Term::new_literal_dt(txt, dt).unwrap()
+    }
+    fn new_literal_lang<U, L>(txt: U, lang: L) -> Self 
+    where
+        TD: From<U> + From<L>
+    {
+        Term::new_literal_lang(txt, lang).unwrap()
     }
 }

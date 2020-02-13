@@ -33,7 +33,7 @@ where
     /// The preamble for `config` is written immediately.
     pub fn new(target: T, config: &'a Config<Turtle, TD>) -> io::Result<Self> {
         let mut target = target;
-        Turtle::write_preamble(config, &mut target)?;
+        config.write_preamble(&mut target)?;
 
         Ok(Self {
             target,

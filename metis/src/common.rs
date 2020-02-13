@@ -2,9 +2,12 @@
 
 pub mod prolog;
 pub use self::prolog::*;
+pub mod collections;
 
 use crate::error::{Error, Result};
-use crate::turtle::parse::terminals::*;
+use crate::parse::turtle::terminals::*;
+use sophia::term::{Term, TermData};
+use std::borrow::Cow;
 
 /// Marker trait for serialization formats.
 ///
@@ -64,4 +67,47 @@ pub trait Format {
             (p, ns) => Ok((p, ns)),
         }
     }
+}
+
+/// Type hack to provide a term with the suiting TermData.
+pub trait Valid<TD: TermData>: Format {
+    /// The concrete type which should has the correct TermData.
+    type Term: RdfTerm<TD>;
+}
+
+/// The term type for a given `Format` and `TermData`
+pub type FormatTerm<F, TD> = <F as Valid<TD>>::Term;
+
+/// The term for a given `Format` with `TermData` `Cow<'a, str>`.
+pub type CowTerm<'a, F> = FormatTerm<F, Cow<'a, str>>;
+
+/// Abstraction of an RDF term.
+/// 
+/// The constructor functions could be replaced when we have sub-terms like 
+/// `IRI` and `Literal` by trait bounds: Self: From<Iri<TD>> + ...
+/// 
+/// TODO: Should have error-handling?
+pub trait RdfTerm<TD: TermData>: std::fmt::Debug + Clone + PartialEq + Eq + std::hash::Hash {
+    /// Create a new Iri
+    fn new_iri<U>(iri: U) -> Self 
+    where
+        TD: From<U>;
+    /// Create a new Iri from namespace and suffix.
+    fn new_iri2<U, V>(ns: U, suffix: V) -> Self 
+    where
+        TD: From<U> + From<V>;
+    /// Create a new blank node from a given label.
+    fn new_blank_node<U>(label: U) -> Self 
+    where
+        TD: From<U>;
+    /// Create a new blank node from a given label.
+    /// 
+    /// TODO: Replace dt: Term by Iri
+    fn new_literal_dt<U>(txt: U, dt: Term<TD>) -> Self 
+    where
+        TD: From<U>;
+    /// Create a new blank node from a given label.
+    fn new_literal_lang<U, L>(txt: U, lang: L) -> Self 
+    where
+        TD: From<U> + From<L>;
 }

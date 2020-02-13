@@ -2,6 +2,7 @@
 
 pub mod config;
 pub use self::config::*;
+pub mod turtle;
 
 use crate::Format;
 use sophia::term::TermData;

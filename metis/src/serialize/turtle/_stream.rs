@@ -1,7 +1,9 @@
 //! Implementation of a streaming serializer for Turtle.
 
 use super::Turtle;
-use crate::serialize::{config::Config, Error, Result, Serializable};
+use crate::error::{Error, Result};
+use crate::serialize::Config;
+use crate::serialize::Serializable;
 use sophia::term::{Term, TermData};
 use sophia::triple::{
     stream::{SinkError, SourceError, StreamError},
@@ -31,7 +33,7 @@ where
     /// The preamble for `config` is written immediately.
     pub fn new(target: T, config: &'a Config<Turtle, TD>) -> io::Result<Self> {
         let mut target = target;
-        Turtle::write_preamble(config, &mut target)?;
+        config.write_preamble(&mut target)?;
 
         Ok(Self {
             target,

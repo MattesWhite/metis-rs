@@ -16,6 +16,7 @@ sophia = {git = "http://github.com/pchampin/sophia_rs"}
 thiserror = "1.0.10"
 regex = "1.3.3"
 lazy_static = "1.4.0"
+nom = { version="^5", features=["regex"]}
 
 [dev-dependencies]
 test-case = "1.0.0"

@@ -1,25 +1,13 @@
-//! Serialization in Turtle format.
+//! Serialize the turtle format.
 
-pub mod regex;
-pub mod stream;
+mod _stream;
+pub use self::_stream::*;
 
-pub use self::stream::Serializer as StreamSerializer;
-
-use super::config::Config;
-use super::{Format, Result, Serializable};
+use crate::common::Prolog;
+use crate::serialize::{Config, Serializable};
+use crate::Turtle;
 use sophia::term::{Term, TermData};
 use std::io;
-
-/// Type level representation of the [Turtle serialization](https://www.w3.org/TR/turtle/).
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Turtle;
-
-impl Format for Turtle {
-    /// `Self` as no additional data is required.
-    type ConfigData = Self;
-
-    // validation functions are default impl.
-}
 
 impl<TD> Serializable<Turtle> for Term<TD>
 where
@@ -52,27 +40,25 @@ where
     }
 }
 
-impl Turtle {
-    /// Write the preamble according to the `config` to the target.
+impl<TD: TermData> Prolog<Turtle, TD> {
+    /// Write the preamble according to the `prolog` to the target.
     #[allow(clippy::useless_let_if_seq)]
-    pub fn write_preamble<TD, T>(config: &Config<Self, TD>, target: &mut T) -> io::Result<()>
+    pub fn write_preamble<T>(&self, target: &mut T) -> io::Result<()>
     where
-        TD: TermData,
         T: io::Write,
     {
         // this is more clear than clippy's suggestion
         let mut wrote_something = false;
 
-        if !config.prefixes.is_empty() {
-            config
-                .prefixes
+        if !self.prefixes.is_empty() {
+            self.prefixes
                 .iter()
                 .map(|(p, ns)| writeln!(target, "@prefix {}: <{}> .", p.as_ref(), ns.as_ref()))
                 .collect::<io::Result<Vec<()>>>()?;
             wrote_something = true;
         }
 
-        if let Some(base) = &config.base {
+        if let Some(base) = &self.base {
             writeln!(target, "@base <{}> .", base.as_ref())?;
             wrote_something = true;
         }

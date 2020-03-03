@@ -3,8 +3,8 @@
 mod util;
 pub use self::util::*;
 
-pub mod turtle;
 pub mod n3;
+pub mod turtle;
 
 use crate::common::*;
 use std::borrow::Cow;
@@ -12,7 +12,7 @@ use std::collections::VecDeque;
 
 /// The current context of the parser.
 #[derive(Debug)]
-pub struct Context<'a, F> 
+pub struct Context<'a, F>
 where
     F: Format + Valid<Cow<'a, str>>,
 {
@@ -25,7 +25,7 @@ where
     triple_stack: VecDeque<[CowTerm<'a, F>; 3]>,
 }
 
-impl<'a, F> Default for Context<'a, F> 
+impl<'a, F> Default for Context<'a, F>
 where
     F: Format + Valid<Cow<'a, str>>,
 {
@@ -38,7 +38,7 @@ where
     }
 }
 
-impl<'a, F> Context<'a, F> 
+impl<'a, F> Context<'a, F>
 where
     F: Format + Valid<Cow<'a, str>>,
 {

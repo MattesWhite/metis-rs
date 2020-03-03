@@ -14,10 +14,10 @@ pub mod production;
 pub mod terminals;
 
 use super::turtle::terminals as ttl_terminal;
-use crate::N3;
 use crate::error::Result;
 use crate::parse::Context;
 use crate::CowTerm as FormatCowTerm;
+use crate::N3;
 use std::borrow::Cow;
 use std::cell::RefCell;
 

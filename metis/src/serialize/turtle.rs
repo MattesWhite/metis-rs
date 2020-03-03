@@ -3,9 +3,9 @@
 mod _stream;
 pub use self::_stream::*;
 
-use crate::Turtle;
-use crate::serialize::{Config, Serializable};
 use crate::common::Prolog;
+use crate::serialize::{Config, Serializable};
+use crate::Turtle;
 use sophia::term::{Term, TermData};
 use std::io;
 
@@ -40,7 +40,6 @@ where
     }
 }
 
-
 impl<TD: TermData> Prolog<Turtle, TD> {
     /// Write the preamble according to the `prolog` to the target.
     #[allow(clippy::useless_let_if_seq)]
@@ -52,8 +51,7 @@ impl<TD: TermData> Prolog<Turtle, TD> {
         let mut wrote_something = false;
 
         if !self.prefixes.is_empty() {
-            self
-                .prefixes
+            self.prefixes
                 .iter()
                 .map(|(p, ns)| writeln!(target, "@prefix {}: <{}> .", p.as_ref(), ns.as_ref()))
                 .collect::<io::Result<Vec<()>>>()?;

@@ -1,8 +1,9 @@
 //! Production rules of Turtle.
 
 use super::{terminals::*, Context, CowTerm};
-use crate::parse::{parse_regex, unwrap_str};
 use crate::collections::*;
+use crate::parse::{parse_regex, unwrap_str};
+use crate::Turtle;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, tag_no_case};
 use nom::combinator::{map, map_opt, opt};
@@ -13,7 +14,6 @@ use sophia::ns::{rdf, xsd};
 use sophia::term::Term;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use crate::Turtle;
 
 /// A context wrapped in a RefCell.
 ///
@@ -24,7 +24,7 @@ pub type RefContext<'a> = RefCell<Context<'a, Turtle>>;
 /// Apply the escape sequences of UCHAR and ECHAR
 ///
 /// TODO: implement
-fn escape(i: &str) -> Cow<'_, str> {
+pub(crate) fn escape(i: &str) -> Cow<'_, str> {
     i.into()
 }
 
@@ -179,9 +179,15 @@ pub fn predicate_object_list<'a>(
 /// Parses Turtle's production
 /// [8] objectList ::= object (',' object)*
 pub fn object_list<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, TermList<'a, Turtle>> {
-    separated_list(tuple((multispace0, tag(","), multispace0)), |i| {
+    let (rest, list) = separated_list(tuple((multispace0, tag(","), multispace0)), |i| {
         object(i, ctx)
-    })(i)
+    })(i)?;
+
+    if list.len() == 0 {
+        Err(NomError::Error(error_position!(rest, ErrorKind::Verify)))
+    } else {
+        Ok((rest, list))
+    }
 }
 
 /// Parses Turtle's production
@@ -234,8 +240,8 @@ pub fn object<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, CowTerm<
 pub fn literal<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, CowTerm<'a>> {
     alt((
         |i| rdf_literal(i, ctx),
-        |i| numeric_literal(i, ctx),
-        |i| boolean_literal(i, ctx),
+        |i| numeric_literal(i),
+        |i| boolean_literal(i),
     ))(i)
 }
 
@@ -294,7 +300,7 @@ pub fn collection<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, CowT
 
 /// Parses Turtle's production
 /// [16] NumericLiteral ::= INTEGER | DECIMAL | DOUBLE
-pub fn numeric_literal<'a>(i: &'a str, _: &RefContext<'a>) -> IResult<&'a str, CowTerm<'a>> {
+pub fn numeric_literal<'a>(i: &'a str) -> IResult<&'a str, CowTerm<'a>> {
     alt((
         map(parse_regex(&INTEGER), |i| {
             Term::new_literal_dt_unchecked(i, Term::from(&xsd::integer))
@@ -311,7 +317,7 @@ pub fn numeric_literal<'a>(i: &'a str, _: &RefContext<'a>) -> IResult<&'a str, C
 /// Parses Turtle's production
 /// [128s] RDFLiteral ::= String (LANGTAG | '^^' iri)?
 pub fn rdf_literal<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, CowTerm<'a>> {
-    let (rest, string) = string(i, ctx)?;
+    let (rest, string) = string(i)?;
 
     if let Ok((rest, dt)) = preceded(tag("^^"), |i| iri(i, ctx))(rest) {
         Ok((rest, Term::new_literal_dt_unchecked(string, dt)))
@@ -329,7 +335,7 @@ pub fn rdf_literal<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, Cow
 
 /// Parses Turtle's production
 /// [133s] BooleanLiteral ::= 'true' | 'false'
-pub fn boolean_literal<'a>(i: &'a str, _: &RefContext<'a>) -> IResult<&'a str, CowTerm<'a>> {
+pub fn boolean_literal<'a>(i: &'a str) -> IResult<&'a str, CowTerm<'a>> {
     map(alt((tag("true"), tag("false"))), |s| {
         Term::new_literal_dt_unchecked(s, Term::from(&xsd::boolean))
     })(i)
@@ -337,7 +343,7 @@ pub fn boolean_literal<'a>(i: &'a str, _: &RefContext<'a>) -> IResult<&'a str, C
 
 /// Parses Turtle's production
 /// [17] String ::= STRING_LITERAL_QUOTE | STRING_LITERAL_SINGLE_QUOTE | STRING_LITERAL_LONG_SINGLE_QUOTE | STRING_LITERAL_LONG_QUOTE
-pub fn string<'a>(i: &'a str, _: &RefContext<'a>) -> IResult<&'a str, Cow<'a, str>> {
+pub fn string<'a>(i: &'a str) -> IResult<&'a str, Cow<'a, str>> {
     map(
         alt((
             map(parse_regex(&STRING_LITERAL_LONG_QUOTE), |s| {
@@ -537,8 +543,7 @@ mod test {
     #[test_case("\"\"\"quote\"\"\"  rest" => ("  rest", "quote") ; "long quote")]
     #[test_case("'''quote'''  rest" => ("  rest", "quote") ; "long single quote")]
     fn check_string(i: &str) -> (&str, &str) {
-        let ctx = ctx();
-        let (rest, string) = string(i, &ctx).unwrap();
+        let (rest, string) = string(i).unwrap();
         if let Cow::Borrowed(string) = string {
             (rest, string)
         } else {

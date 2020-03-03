@@ -7,7 +7,7 @@ pub type TermList<'a, F> = Vec<CowTerm<'a, F>>;
 
 /// A predicate with a list of objects
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PoList<'a, F> 
+pub struct PoList<'a, F>
 where
     F: Format + Valid<Cow<'a, str>>,
 {
@@ -15,7 +15,7 @@ where
     objects: TermList<'a, F>,
 }
 
-impl<'a, F> PoList<'a, F> 
+impl<'a, F> PoList<'a, F>
 where
     F: Format + Valid<Cow<'a, str>>,
 {
@@ -39,7 +39,7 @@ where
 
 /// A subject with a list of predicate-object-lists
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpoList<'a, F> 
+pub struct SpoList<'a, F>
 where
     F: Format + Valid<Cow<'a, str>>,
 {
@@ -47,7 +47,7 @@ where
     po_lists: Vec<PoList<'a, F>>,
 }
 
-impl<'a, F> SpoList<'a, F> 
+impl<'a, F> SpoList<'a, F>
 where
     F: Format + Valid<Cow<'a, str>>,
 {

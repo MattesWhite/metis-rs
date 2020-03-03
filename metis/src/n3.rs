@@ -49,10 +49,14 @@
 //! | `boolean_literal` | `'false' \| 'true'` | from Turtle |
 //! | `string`        | `STRING_LITERAL_QUOTE \| STRING_LITERAL_SINGLE_QUOTE \| STRING_LITERAL_LONG_QUOTE \| STRING_LITERAL_LONG_SINGLE_QUOTE` | [1] |
 //! | `bnode_property_list` | `'[' property_list ']'` | |
+//! | `blank_node`    | `BLANK_NODE_LABEL \| ANON` | [1] |
 //!
 //! [1] The terminals of Turtle are used.
 
-use crate::{Format, common::{Valid, RdfTerm}};
+use crate::{
+    common::{RdfTerm, Valid},
+    Format,
+};
 use sophia::term::{Term, TermData};
 
 /// Type level representation of the Notation3 format.
@@ -70,7 +74,7 @@ pub enum N3Term<TD: TermData> {
     /// The standard RDF term from sophia.
     Term(Term<TD>),
     /// A formula.
-    Formula(Vec<[N3Term<TD>; 3]>),
+    Formula(Formula<TD>),
 }
 
 impl<TD: TermData> From<Term<TD>> for N3Term<TD> {
@@ -79,39 +83,72 @@ impl<TD: TermData> From<Term<TD>> for N3Term<TD> {
     }
 }
 
+impl<TD: TermData> From<Formula<TD>> for N3Term<TD> {
+    fn from(f: Formula<TD>) -> Self {
+        N3Term::Formula(f)
+    }
+}
+
 impl<TD: TermData + std::fmt::Debug> Valid<TD> for N3 {
     type Term = N3Term<TD>;
 }
 
 impl<TD: TermData + std::fmt::Debug> RdfTerm<TD> for N3Term<TD> {
-    fn new_iri<U>(iri: U) -> Self 
+    fn new_iri<U>(iri: U) -> Self
     where
-        TD: From<U>
+        TD: From<U>,
     {
         Term::new_iri(iri).unwrap().into()
     }
-    fn new_iri2<U, V>(ns: U, suffix: V) -> Self 
+    fn new_iri2<U, V>(ns: U, suffix: V) -> Self
     where
-        TD: From<U> + From<V>
+        TD: From<U> + From<V>,
     {
         Term::new_iri2(ns, suffix).unwrap().into()
     }
-    fn new_blank_node<U>(label: U) -> Self 
+    fn new_blank_node<U>(label: U) -> Self
     where
-        TD: From<U>
+        TD: From<U>,
     {
         Term::new_bnode(label).unwrap().into()
     }
-    fn new_literal_dt<U>(txt: U, dt: Term<TD>) -> Self 
+    fn new_literal_dt<U>(txt: U, dt: Term<TD>) -> Self
     where
-        TD: From<U>
+        TD: From<U>,
     {
         Term::new_literal_dt(txt, dt).unwrap().into()
     }
-    fn new_literal_lang<U, L>(txt: U, lang: L) -> Self 
+    fn new_literal_lang<U, L>(txt: U, lang: L) -> Self
     where
-        TD: From<U> + From<L>
+        TD: From<U> + From<L>,
     {
         Term::new_literal_lang(txt, lang).unwrap().into()
+    }
+}
+
+/// A N3 fromula
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Formula<TD: TermData>(Vec<[N3Term<TD>; 3]>);
+
+impl<TD: TermData> std::ops::Deref for Formula<TD> {
+    type Target = Vec<[N3Term<TD>; 3]>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<TD> std::ops::DerefMut for Formula<TD>
+where
+    TD: TermData,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<TD: TermData> From<Vec<[N3Term<TD>; 3]>> for Formula<TD> {
+    fn from(v: Vec<[N3Term<TD>; 3]>) -> Self {
+        Self(v)
     }
 }

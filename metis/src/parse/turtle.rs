@@ -26,9 +26,9 @@ mod test_suite;
 
 use self::production::statement;
 use self::terminals::multispace0;
-use crate::Turtle;
 use crate::error::{Error, Result};
 use crate::parse::Context;
+use crate::Turtle;
 use sophia::term::Term;
 use std::borrow::Cow;
 use std::cell::RefCell;

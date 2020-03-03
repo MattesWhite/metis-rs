@@ -5,6 +5,8 @@
 # Features
 
 - Serializer for [Turtle](https://www.w3.org/TR/turtle/) (WIP).
+- Parser for Turtle (WIP).
+- Parser for Notation3 (not usabel, yet).
 
 # License
 

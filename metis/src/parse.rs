@@ -2,32 +2,35 @@
 
 mod util;
 pub use self::util::*;
+mod error;
+pub use self::error::*;
 
-pub mod n3;
+// later...
+// pub mod n3;
 pub mod turtle;
 
 use crate::common::*;
-use std::borrow::Cow;
+use sophia::term::{blank_node::BlankNode, iri::Iri, mown_str::MownStr};
 use std::collections::VecDeque;
 
 /// The current context of the parser.
 #[derive(Debug)]
-pub struct Context<'a, F>
+pub struct Context<'td, F>
 where
-    F: Format + Valid<Cow<'a, str>>,
+    F: Format + Valid<MownStr<'td>>,
 {
     /// Prefixes and Base
-    prolog: Prolog<F, Cow<'a, str>>,
+    prolog: Prolog<'td, F>,
     /// Number of parsed blank nodes. Used for naming anonymous nodes.
     bnode_cnt: usize,
     /// When a list is parsed its surrounding block is parsed first. The
     /// list's triples are stored and returned afterwards.
-    triple_stack: VecDeque<[CowTerm<'a, F>; 3]>,
+    triple_stack: VecDeque<[MownTerm<'td, F>; 3]>,
 }
 
-impl<'a, F> Default for Context<'a, F>
+impl<'td, F> Default for Context<'td, F>
 where
-    F: Format + Valid<Cow<'a, str>>,
+    F: Format + Valid<MownStr<'td>>,
 {
     fn default() -> Self {
         Self {
@@ -38,11 +41,11 @@ where
     }
 }
 
-impl<'a, F> Context<'a, F>
+impl<'td, F> Context<'td, F>
 where
-    F: Format + Valid<Cow<'a, str>>,
+    F: Format + Valid<MownStr<'td>>,
 {
-    /// Similar to `Prolog`'s mwthod
+    /// Similar to `Prolog`'s method
     pub fn with_default_prefixes() -> Self {
         Self {
             prolog: Prolog::with_default_prefixes(),
@@ -50,30 +53,40 @@ where
             triple_stack: VecDeque::new(),
         }
     }
-    fn new_labeled_bnode(&mut self, label: &'a str) -> CowTerm<'a, F> {
+    fn new_labeled_bnode(&mut self, label: &'td str) -> BlankNode<MownStr<'td>> {
         self.bnode_cnt += 1;
-        CowTerm::<'a, F>::new_blank_node(label)
+        // Should be ensured by parser.
+        BlankNode::<MownStr<'td>>::new_unchecked(label)
     }
-    fn new_anon_bnode(&mut self) -> CowTerm<'a, F> {
-        let bn = CowTerm::<'a, F>::new_blank_node(format!("anon{}", self.bnode_cnt));
+    fn new_anon_bnode(&mut self) -> BlankNode<MownStr<'td>> {
+        let label = format!("anon{}", self.bnode_cnt);
         self.bnode_cnt += 1;
-        bn
+        BlankNode::<MownStr<'td>>::new_unchecked(label).into()
     }
-    fn new_iri(&self, iri: &'a str) -> CowTerm<'a, F> {
-        // TODO: Resolve properly with base
-        CowTerm::<'a, F>::new_iri(iri)
+    fn new_iri(&self, iri: MownStr<'td>) -> Iri<MownStr<'td>> {
+        let iri = Iri::<MownStr<'td>>::new(iri).expect("IRI is valid through parser");
+        self.prolog.resolve(&iri)
     }
-    fn pop_triple(&mut self) -> Option<[CowTerm<'a, F>; 3]> {
+    fn pop_triple(&mut self) -> Option<[MownTerm<'td, F>; 3]> {
         self.triple_stack.pop_front()
     }
-    fn push_triple(&mut self, triple: [CowTerm<'a, F>; 3]) {
+    fn push_triple(&mut self, triple: [MownTerm<'td, F>; 3]) {
         self.triple_stack.push_back(triple)
     }
-    fn push_triples(&mut self, src: impl Iterator<Item = [CowTerm<'a, F>; 3]>) {
+    fn push_triples(&mut self, src: impl Iterator<Item = [MownTerm<'td, F>; 3]>) {
         self.triple_stack.extend(src);
     }
 }
 
+/// Get the given string without a left and right margin of characters.
+///
+/// # Example
+///
+/// ```
+/// let i = "123454321";
+/// assert_eq!(unwrap_str(i, 1), "2345432");
+/// assert_eq!(unwrap_str(i, 3), "454");
+/// ```
 #[inline]
 fn unwrap_str(i: &str, margin: usize) -> &str {
     &i[margin..i.len() - margin]

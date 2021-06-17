@@ -91,7 +91,7 @@ lazy_static! {
     /// Production of HEX according to the [Turtle spec](https://www.w3.org/TR/turtle/#sec-grammar).
     pub static ref PN_LOCAL_ESC: Regex = Regex::new(r#"^\\[-_~\.!\$&'\(\)\*\+,;=/\?#@%]"#).unwrap();
 
-    /// Utiliy
+    /// Utility
     static ref DIGIT: Regex = Regex::new(r#"^[[:digit:]]"#).unwrap();
 }
 
@@ -103,13 +103,14 @@ pub fn pname_ln(i: &str) -> IResult<&str, &str> {
 
 /// Parses Turtle's rule
 /// [141s] BLANK_NODE_LABEL ::= '_:' (PN_CHARS_U | [[:digit:]]) ((PN_CHARS | '.')* PN_CHARS)?
-pub fn blank_node_label(i: &str) -> IResult<&str, &str> {
+pub fn blank_node_label(i: &str) -> IResult<&str, Option<&str>> {
     recognize(tuple((
         tag("_:"),
         alt((parse_regex(&PN_CHARS_U), parse_regex(&DIGIT))),
         many0(alt((parse_regex(&PN_CHARS), tag(".")))),
         opt(parse_regex(&PN_CHARS)),
     )))(i)
+    .map(|(rest, id)| (rest, Some(id)))
 }
 
 /// Parses Turtle's rule
@@ -132,12 +133,12 @@ pub fn pn_local(i: &str) -> IResult<&str, &str> {
     )))(i)
 }
 
-/// Parses at least one whitespace (includeing comments).
+/// Parses at least one whitespace (including comments).
 pub fn multispace1(i: &str) -> IResult<&str, &str> {
     parse_regex(&WS_MANY1)(i)
 }
 
-/// Parses zero or more whitespaces (includeing comments).
+/// Parses zero or more whitespaces (including comments).
 pub fn multispace0(i: &str) -> IResult<&str, &str> {
     parse_regex(&WS_MANY0)(i)
 }
@@ -271,7 +272,7 @@ mod test {
     #[test_case("_:0  rest" => Ok(("  rest", "_:0")) ; "start num")]
     #[test_case("_:_  rest" => Ok(("  rest", "_:_")) ; "start under")]
     fn check_blank_node_label(i: &str) -> IResult<&str, &str> {
-        blank_node_label(i)
+        blank_node_label(i).map(|(rest, id)| (rest, id.unwrap()))
     }
 
     #[test_case(" \t\n\r" => true ; "valid spaces")]

@@ -13,6 +13,7 @@ edition = "2018"
 
 [dependencies]
 sophia = {git = "http://github.com/pchampin/sophia_rs"}
+sophia_term = {git = "http://github.com/pchampin/sophia_rs"}
 thiserror = "1.0.10"
 regex = "1.3.3"
 lazy_static = "1.4.0"

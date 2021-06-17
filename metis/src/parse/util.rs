@@ -10,7 +10,7 @@ use regex::Regex;
 ///
 /// # Skipped content
 ///
-/// The way regular expressions work it is possible that this parser skipps
+/// The way regular expressions work it is possible that this parser skips
 /// significant content. It is recommended to start regexes with '^' to prevent
 /// this.
 pub fn parse_regex(re: &'static Regex) -> impl Fn(&str) -> IResult<&str, &str> {

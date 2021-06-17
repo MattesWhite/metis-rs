@@ -14,8 +14,8 @@
 //! - Correct resolving of relative IRIs.
 //! - Escape characters (ECHAR and UCHAR).
 //!
-//! In the furture it is planned to execute the parser against the W3C test
-//! suite where probablly further missing features will pop up.
+//! In the future it is planned to execute the parser against the W3C test
+//! suite where probably further missing features will pop up.
 //!
 
 pub mod production;
@@ -29,32 +29,30 @@ use self::terminals::multispace0;
 use crate::error::{Error, Result};
 use crate::parse::Context;
 use crate::Turtle;
-use sophia::term::Term;
-use std::borrow::Cow;
-use std::cell::RefCell;
+use sophia::term::{iri::Iri, mown_str::MownStr, Term};
 
-/// Shortcut for `Term<Cow<'a, str>>`.
-pub type CowTerm<'a> = Term<Cow<'a, str>>;
+/// Shortcut for `Term<MownStr<'doc>>`.
+pub type MownTerm<'doc> = Term<MownStr<'doc>>;
 
 /// The Turtle parser that parses a document step by step.
-pub struct Parser<'a> {
+pub struct Parser<'doc> {
     /// Gathered metadata.
-    ctx: RefCell<Context<'a, Turtle>>,
+    ctx: Context<'doc, Turtle>,
     /// Current position within the document.
-    current: &'a str,
-    /// true if the parser failed once of is at EOF.
+    current: &'doc str,
+    /// true if the parser failed once or if it is at EOF.
     ///
     /// In both cases the `next() = None`.
     end_or_failed: bool,
 }
 
-impl<'a> Parser<'a> {
+impl<'doc> Parser<'doc> {
     /// Creates a new Parser.
-    pub fn new(doc: &'a str) -> Self {
+    pub fn new(doc: &'doc str) -> Self {
         // trim leading whitespaces
         let (doc, _) = multispace0(doc).unwrap();
         Self {
-            ctx: RefCell::new(Context::default()),
+            ctx: Context::default(),
             current: doc,
             end_or_failed: false,
         }
@@ -63,22 +61,22 @@ impl<'a> Parser<'a> {
     ///
     /// _Note:_ If the document contains an own `base` directive the pre-set
     /// value is overridden.
-    pub fn with_base(doc: &'a str, base: impl Into<Cow<'a, str>>) -> Result<Self> {
+    pub fn with_base(doc: &'doc str, base: Iri<MownStr<'doc>>) -> Result<Self> {
         let mut ctx = Context::default();
-        ctx.prolog.set_base(base.into())?;
+        ctx.prolog.set_base(base)?;
 
         // trim leading whitespaces
         let (doc, _) = multispace0(doc).unwrap();
         Ok(Self {
-            ctx: RefCell::new(ctx),
+            ctx,
             current: doc,
             end_or_failed: false,
         })
     }
 }
 
-impl<'a> Iterator for Parser<'a> {
-    type Item = Result<[CowTerm<'a>; 3]>;
+impl<'doc> Iterator for Parser<'doc> {
+    type Item = Result<[MownTerm<'doc>; 3]>;
 
     /// Returns parsed triples.
     ///
@@ -89,7 +87,7 @@ impl<'a> Iterator for Parser<'a> {
         if self.end_or_failed {
             // parser finished
             return None;
-        } else if let Some(tri) = self.ctx.borrow_mut().pop_triple() {
+        } else if let Some(tri) = self.ctx.pop_triple() {
             // triples are left from the last parsing
             return Some(Ok(tri));
         } else if self.current.is_empty() {
@@ -118,8 +116,7 @@ impl<'a> Iterator for Parser<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use sophia::graph::Graph;
-    use sophia::serializer::nt;
+    use sophia::serializer::{nt, Stringifier, TripleSerializer};
     use sophia::triple::stream::TripleSource;
 
     #[test]
@@ -180,7 +177,9 @@ mod test {
         let mut g = vec![];
 
         parser.in_graph(&mut g)?;
-        let s = g.triples().in_sink(&mut nt::stringifier()).unwrap();
+        let s = nt::NtSerializer::new_stringifier()
+            .serialize_graph(&g)?
+            .to_string();
         println!("Serialized: \n\n {}", s);
         Ok(())
     }

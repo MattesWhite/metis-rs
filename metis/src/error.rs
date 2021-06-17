@@ -1,5 +1,6 @@
 //! Error handling.
 
+use crate::parse::PosError as ParserError;
 use sophia::term::TermError;
 use std::io;
 
@@ -20,11 +21,11 @@ pub enum Error {
     #[error("The text {0} is not a valid Prefix")]
     InvalidPrefix(String),
     /// The requested indentation is to wide.
-    #[error(
-        "Requested to much spaces ({0}) to indent (max is {})",
-        crate::serialize::config::MAX_SPACES
-    )]
-    ToMuchSpaces(u8),
+    // #[error(
+    //     "Requested to much spaces ({0}) to indent (max is {})",
+    //     crate::serialize::config::MAX_SPACES
+    // )]
+    // ToMuchSpaces(u8),
     /// The defined spacing is to small.
     #[error("Spacing must be at least one space")]
     InvalidSpacing,
@@ -32,9 +33,16 @@ pub enum Error {
     #[error("Target error: {0}")]
     FromIo(#[from] io::Error),
     /// Error from parsing.
-    #[error("Parser error: {0}")]
+    #[error("Parser: {0}")]
     Parser(String),
-    /// Error from sophia.
+    /// Error from `sophia`.
     #[error("{0}")]
     Term(#[from] TermError),
+}
+
+impl<'a> From<ParserError<'a>> for Error {
+    /// Clones the parser error's context. Removes the lifetime in turn.
+    fn from(pe: ParserError<'a>) -> Self {
+        Error::Parser(pe.to_string())
+    }
 }

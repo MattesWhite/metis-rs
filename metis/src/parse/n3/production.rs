@@ -48,7 +48,7 @@ pub type CowFormula<'a> = Formula<Cow<'a, str>>;
 pub type N3Triple<'a> = [CowTerm<'a>; 3];
 
 /// Iterator of `N3Term`s
-pub type N3TriplesIter<'a> = Box<dyn 'a + Iterator<Item=[CowTerm<'a>; 3]>>;
+pub type N3TriplesIter<'a> = Box<dyn 'a + Iterator<Item = [CowTerm<'a>; 3]>>;
 
 /// A `Vec` of `N3Triple`s
 pub type N3TriplesList<'a> = Vec<N3Triple<'a>>;
@@ -64,7 +64,10 @@ pub fn statement<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, N3Tri
 }
 
 /// Parses rule `subject`
-pub fn subject<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, (CowTerm<'a>, N3TriplesIter<'a>)> {
+pub fn subject<'a>(
+    i: &'a str,
+    ctx: &RefContext<'a>,
+) -> IResult<&'a str, (CowTerm<'a>, N3TriplesIter<'a>)> {
     expression(i, ctx)
 }
 
@@ -92,10 +95,9 @@ pub fn property_list<'a, 's>(
                 // TODO: dont allocate an extra vector
                 let base: Vec<_> = objects
                     .into_iter()
-                    .map(|o| [s.clone(), verb.clone(), o]).collect();
-                base.into_iter()
-                    .chain(v_others)
-                    .chain(o_others)
+                    .map(|o| [s.clone(), verb.clone(), o])
+                    .collect();
+                base.into_iter().chain(v_others).chain(o_others)
             },
         ),
     )(i)?;
@@ -108,7 +110,10 @@ pub fn property_list<'a, 's>(
 }
 
 /// Parses rule `object_list`
-pub fn object_list<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, (Vec<CowTerm<'a>>, N3TriplesIter<'a>)> {
+pub fn object_list<'a>(
+    i: &'a str,
+    ctx: &RefContext<'a>,
+) -> IResult<&'a str, (Vec<CowTerm<'a>>, N3TriplesIter<'a>)> {
     let (rest, list) = separated_list(
         tuple((
             ttl_terminal::multispace0,
@@ -133,16 +138,24 @@ pub fn object_list<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, (Ve
 }
 
 /// Parses rule `predicate`
-pub fn predicate<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, (CowTerm<'a>, N3TriplesIter<'a>)> {
+pub fn predicate<'a>(
+    i: &'a str,
+    ctx: &RefContext<'a>,
+) -> IResult<&'a str, (CowTerm<'a>, N3TriplesIter<'a>)> {
     alt((
         |i| expression(i, ctx),
         map(tag("a"), |_| (Term::from(&rdf::type_).into(), empty_iter())),
-        map(tag("=>"), |_| (Term::from(&log::implies).into(), empty_iter())),
+        map(tag("=>"), |_| {
+            (Term::from(&log::implies).into(), empty_iter())
+        }),
     ))(i)
 }
 
 /// Parses rule `object`
-pub fn object<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, (CowTerm<'a>, N3TriplesIter<'a>)> {
+pub fn object<'a>(
+    i: &'a str,
+    ctx: &RefContext<'a>,
+) -> IResult<&'a str, (CowTerm<'a>, N3TriplesIter<'a>)> {
     expression(i, ctx)
 }
 
@@ -153,7 +166,10 @@ pub fn object<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, (CowTerm
 /// Returns the subject of the first element in the list. If the collection is
 /// empty `rdf:nil` is returned. In addition, the triples representing the rest
 /// of the list are pushed on the context's stack.
-pub fn list<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, (CowTerm<'a>, N3TriplesIter<'a>)> {
+pub fn list<'a>(
+    i: &'a str,
+    ctx: &RefContext<'a>,
+) -> IResult<&'a str, (CowTerm<'a>, N3TriplesIter<'a>)> {
     let (rest, _) = tag("(")(i)?;
     let (rest, _) = ttl_terminal::multispace0(rest)?;
     let (rest, contents) = separated_list(ttl_terminal::multispace1, |i| expression(i, ctx))(rest)?;
@@ -182,14 +198,23 @@ pub fn list<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, (CowTerm<'
             others.push(other);
         }
 
-        Ok((rest, (first, Box::new(triples.into_iter().chain(others.into_iter().flatten())))))
+        Ok((
+            rest,
+            (
+                first,
+                Box::new(triples.into_iter().chain(others.into_iter().flatten())),
+            ),
+        ))
     }
 }
 
 /// Parses rule `expression`
 ///
 /// Returns the 'value' of the expression and triples parsed while evaluating.
-pub fn expression<'a>(i: &'a str, ctx: &RefContext<'a>) -> IResult<&'a str, (CowTerm<'a>, N3TriplesIter<'a>)> {
+pub fn expression<'a>(
+    i: &'a str,
+    ctx: &RefContext<'a>,
+) -> IResult<&'a str, (CowTerm<'a>, N3TriplesIter<'a>)> {
     alt((
         |i| iri(i, ctx).map(|(r, t)| (r, (t, empty_iter()))),
         |i| formula(i, ctx).map(|(r, f)| (r, (f.into(), empty_iter()))),

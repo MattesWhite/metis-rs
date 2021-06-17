@@ -3,8 +3,7 @@
 /// Terms of N3's logic vocabulary.
 #[allow(missing_docs)]
 pub mod log {
-    use sophia::ns_term;
-    sophia::namespace!(
+    sophia_term::namespace!(
         "http://www.w3.org/2000/10/swap/log#",
         Chaff,
         N3Document,
@@ -35,8 +34,7 @@ pub mod log {
 /// Terms of N3's math vocabulary.
 #[allow(missing_docs)]
 pub mod math {
-    use sophia::ns_term;
-    sophia::namespace!(
+    sophia_term::namespace!(
         "http://www.w3.org/2000/10/swap/math#",
         Function,
         List,

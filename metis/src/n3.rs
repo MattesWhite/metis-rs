@@ -1,6 +1,6 @@
 //! Implementation of Notation3 (N3).
 //!
-//! # Comformance to the spec
+//! # Conformance to the spec
 //!
 //! For now the implementation of N3 does not fully support the features and
 //! syntax of the official [specification](https://www.w3.org/TeamSubmission/n3/).
@@ -12,7 +12,7 @@
 //!
 //! - *Declarations:* According to the spec, `@prefix` and `@base` declarations
 //!   can be placed anywhere where a statement is valid. Relative `@base` IRI
-//!   are kommulative. Here only one prolog is allowed with the `@prefix`
+//!   are commutative. Here only one prolog is allowed with the `@prefix`
 //!   declarations first then at most one `@base` declaration.
 //! - *Logic quantifiers:* Only the short annotation for variables (`?x`) is
 //!   supported whereas he declarations `@forAll` and `@forSome` are not.
@@ -23,7 +23,7 @@
 //! Due to the age of the Notation3 specification the more modern specification
 //! of [Turtle](https://www.w3.org/TR/turtle/) is used where equally.
 //!
-//! The folowing grammar is supported:
+//! The following grammar is supported:
 //!
 //! | Production      | Rule | Comment |
 //! | --------------- | ---- | ------- |
@@ -57,7 +57,9 @@ use crate::{
     common::{RdfTerm, Valid},
     Format,
 };
-use sophia::term::{Term, TermData};
+use sophia::term::{
+    blank_node::BlankNode, iri::Iri, literal::Literal, variable::Variable, Term, TermData,
+};
 
 /// Type level representation of the Notation3 format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -71,15 +73,50 @@ impl Format for N3 {
 /// A term in N3.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum N3Term<TD: TermData> {
-    /// The standard RDF term from sophia.
-    Term(Term<TD>),
+    /// An IRI.
+    Iri(Iri<TD>),
+    /// An RDF-literal.
+    Literal(Literal<TD>),
+    /// An existentially quantified variable.
+    Existential(BlankNode<TD>),
+    /// An universally quantified variable.
+    Universal(Variable<TD>),
     /// A formula.
     Formula(Formula<TD>),
 }
 
 impl<TD: TermData> From<Term<TD>> for N3Term<TD> {
     fn from(t: Term<TD>) -> Self {
-        N3Term::Term(t)
+        match t {
+            Term::Iri(iri) => N3Term::Iri(iri),
+            Term::Literal(lit) => N3Term::Literal(lit),
+            Term::BNode(bn) => N3Term::Existential(bn),
+            Term::Variable(var) => N3Term::Universal(var),
+        }
+    }
+}
+
+impl<TD: TermData> From<Iri<TD>> for N3Term<TD> {
+    fn from(f: Iri<TD>) -> Self {
+        N3Term::Iri(f)
+    }
+}
+
+impl<TD: TermData> From<Literal<TD>> for N3Term<TD> {
+    fn from(f: Literal<TD>) -> Self {
+        N3Term::Literal(f)
+    }
+}
+
+impl<TD: TermData> From<BlankNode<TD>> for N3Term<TD> {
+    fn from(f: BlankNode<TD>) -> Self {
+        N3Term::Existential(f)
+    }
+}
+
+impl<TD: TermData> From<Variable<TD>> for N3Term<TD> {
+    fn from(f: Variable<TD>) -> Self {
+        N3Term::Universal(f)
     }
 }
 
@@ -93,40 +130,9 @@ impl<TD: TermData + std::fmt::Debug> Valid<TD> for N3 {
     type Term = N3Term<TD>;
 }
 
-impl<TD: TermData + std::fmt::Debug> RdfTerm<TD> for N3Term<TD> {
-    fn new_iri<U>(iri: U) -> Self
-    where
-        TD: From<U>,
-    {
-        Term::new_iri(iri).unwrap().into()
-    }
-    fn new_iri2<U, V>(ns: U, suffix: V) -> Self
-    where
-        TD: From<U> + From<V>,
-    {
-        Term::new_iri2(ns, suffix).unwrap().into()
-    }
-    fn new_blank_node<U>(label: U) -> Self
-    where
-        TD: From<U>,
-    {
-        Term::new_bnode(label).unwrap().into()
-    }
-    fn new_literal_dt<U>(txt: U, dt: Term<TD>) -> Self
-    where
-        TD: From<U>,
-    {
-        Term::new_literal_dt(txt, dt).unwrap().into()
-    }
-    fn new_literal_lang<U, L>(txt: U, lang: L) -> Self
-    where
-        TD: From<U> + From<L>,
-    {
-        Term::new_literal_lang(txt, lang).unwrap().into()
-    }
-}
+impl<TD: TermData + std::fmt::Debug> RdfTerm<TD> for N3Term<TD> {}
 
-/// A N3 fromula
+/// A N3 formula.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Formula<TD: TermData>(Vec<[N3Term<TD>; 3]>);
 

@@ -3,26 +3,39 @@
 
 use crate::error::{Error, Result};
 use crate::Format;
-use sophia::term::TermData;
+use sophia_term::{
+    iri::{Iri, IriParsed, Resolve},
+    mown_str::MownStr,
+    ns::Namespace,
+    TermData, TermError,
+};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-/// Options to serialize format `F`.
-#[derive(Clone, Debug)]
-pub struct Prolog<F, TD>
-where
-    F: Format,
-    TD: TermData,
-{
-    _f: PhantomData<F>,
-    pub(crate) base: Option<TD>,
-    pub(crate) prefixes: HashMap<TD, TD>,
+/// Result of matching an IRI against the base and prefixes of a `Prolog`.
+pub enum PrologMatch<'a, I> {
+    /// Nothing matched.
+    NoMatch,
+    /// The base IRI matched. Contains the rest of the matched IRI.
+    Base(I),
+    /// A prefix matches. Contains the prefix and the rest of the matched IRI.
+    Prefix(&'a str, I),
 }
 
-impl<F, TD> Default for Prolog<F, TD>
+/// Options to serialize format `F`.
+#[derive(Clone, Debug)]
+pub struct Prolog<'td, F>
 where
     F: Format,
-    TD: TermData,
+{
+    _f: PhantomData<F>,
+    pub(crate) base: Option<(Iri<MownStr<'td>>, IriParsed<'static>)>,
+    pub(crate) prefixes: HashMap<&'td str, Namespace<MownStr<'td>>>,
+}
+
+impl<'td, F> Default for Prolog<'td, F>
+where
+    F: Format,
 {
     /// A default prolog is completely empty.
     ///
@@ -36,10 +49,9 @@ where
     }
 }
 
-impl<F, TD> Prolog<F, TD>
+impl<'td, F> Prolog<'td, F>
 where
     F: Format,
-    TD: TermData,
 {
     /// Create the default configuration with the default prefixes.
     ///
@@ -47,7 +59,6 @@ where
     pub fn with_default_prefixes() -> Self
     where
         Self: Default,
-        TD: From<&'static str>,
     {
         let mut tsc = Self::default();
         tsc.add_default_prefixes();
@@ -55,71 +66,69 @@ where
     }
     /// Set the base IRI.
     ///
-    /// If set it is printed with the `@base` directive into the documents
+    /// If set it is printed with the `@base` directive into the document's
     /// preamble.
-    ///
-    /// # Errors
-    ///
-    /// This method fails if base is not a valid prefix IRI.
-    pub fn set_base<U>(&mut self, base: U) -> Result<&mut Self>
-    where
-        U: AsRef<str>,
-        TD: From<U>,
-    {
-        if F::is_valid_ns(&base) {
-            self.base = Some(base.into());
-            Ok(self)
-        } else {
-            Err(Error::InvalidIri(base.as_ref().to_owned()))
+    pub fn set_base(&mut self, base: Iri<MownStr<'td>>) -> Result<&mut Self, TermError> {
+        if base.has_suffix() {
+            return Err(TermError::InvalidIri(
+                "Base IRIs must not be suffixed".to_owned(),
+            ));
         }
+
+        let base = if let Some((_, o_base)) = self.base {
+            o_base.resolve(&base)
+        } else {
+            base
+        };
+
+        let mut buf = String::new();
+        let parsed = base.parse_components(&mut buf);
+        // (Mostly) safe as always altered together with origin `base`
+        // TODO: This is not safe if a panic occurs => use third-party crate!
+        let parsed = unsafe { std::mem::transmute(parsed) };
+
+        self.base.replace((base, parsed));
+        Ok(self)
     }
     /// Removes the base IRI if it was set.
     ///
     /// In the default setting no base IRI is set.
     pub fn unset_base(&mut self) -> &mut Self {
-        self.base = None;
+        self.base.take();
         self
     }
     /// Read the current base IRI.
     ///
     /// If `None` is returned no base IRI is set.
-    pub fn base(&self) -> &Option<TD> {
-        &self.base
+    pub fn base(&self) -> Option<&Iri<MownStr<'td>>> {
+        self.base.as_ref().map(|(iri, _)| iri)
     }
     /// Add a prefix.
     ///
     /// # Error
     ///
-    /// Checks if both prefix and namespace is valid.
-    pub fn add_prefix<P, N>(&mut self, p: P, ns: N) -> Result<&mut Self>
-    where
-        P: AsRef<str>,
-        N: AsRef<str>,
-        TD: From<P> + From<N>,
-    {
-        F::check_prefix_id(p, ns).map(|(p, ns)| {
-            self.prefixes.insert(p.into(), ns.into());
-            self
-        })
+    /// Checks if prefix is valid.
+    pub fn add_prefix(&mut self, p: &'td str, ns: MownStr<'td>) -> Result<&mut Self> {
+        if F::is_valid_prefix(&p) {
+            let ns = Namespace::new(ns)?;
+            let ns = self.resolve(&ns);
+            self.prefixes.insert(p, ns);
+            Ok(self)
+        } else {
+            Err(Error::InvalidPrefix(p.to_string()))
+        }
     }
     /// Add the list of prefixes.
     ///
     /// # Error
     ///
-    /// Checks if both prefixes and namespaces are valid.
-    pub fn add_prefixes<P, N>(
-        &mut self,
-        prefixes: impl Iterator<Item = (P, N)>,
-    ) -> Result<&mut Self>
+    /// Checks if prefixes are valid.
+    pub fn add_prefixes<I>(&mut self, prefixes: I) -> Result<&mut Self>
     where
-        P: AsRef<str>,
-        N: AsRef<str>,
-        TD: From<P> + From<N>,
+        I: Iterator<Item = (&'td str, MownStr<'td>)>,
     {
         if let Some(Err(e)) = prefixes
-            .map(|(p, ns)| {
-                F::check_prefix_id(p, ns).map(|(p, ns)| self.prefixes.insert(p.into(), ns.into()))
-            })
+            .map(|(p, ns)| self.add_prefix(p, ns).map(|_| ()))
             .find(Result::is_err)
         {
             Err(e)
@@ -127,41 +136,65 @@ where
             Ok(self)
         }
     }
-    /// Add the list of prefixes.
-    ///
-    /// # Safety
-    ///
-    /// Neither checks for prefixes nor namespaces are done.
-    pub unsafe fn set_prefixes_unchecked<P, N>(
-        &mut self,
-        prefixes: impl Iterator<Item = (P, N)>,
-    ) -> &mut Self
-    where
-        P: AsRef<str>,
-        N: AsRef<str>,
-        TD: From<P> + From<N>,
-    {
-        prefixes.for_each(|(p, ns)| {
-            self.prefixes.insert(p.into(), ns.into());
-        });
-        self
-    }
     /// Adds prefixes for `rdf`, `rdfs` and `xsd` namespaces.
-    pub fn add_default_prefixes(&mut self) -> &mut Self
-    where
-        TD: From<&'static str>,
-    {
-        self.prefixes
-            .insert("rdf".into(), sophia::ns::rdf::PREFIX.into());
-        self.prefixes
-            .insert("rdfs".into(), sophia::ns::rdfs::PREFIX.into());
-        self.prefixes
-            .insert("xsd".into(), sophia::ns::xsd::PREFIX.into());
+    pub fn add_default_prefixes(&mut self) -> &mut Self {
+        self.prefixes.insert(
+            "rdf",
+            Namespace::new(sophia::ns::rdf::PREFIX.into()).unwrap(),
+        );
+        self.prefixes.insert(
+            "rdfs",
+            Namespace::new(sophia::ns::rdfs::PREFIX.into()).unwrap(),
+        );
+        self.prefixes.insert(
+            "xsd",
+            Namespace::new(sophia::ns::xsd::PREFIX.into()).unwrap(),
+        );
         self
     }
     /// Deletes all prefixes.
     pub fn clear_prefixes(&mut self) -> &mut Self {
         self.prefixes.clear();
         self
+    }
+    /// Searches for a matching prefix.
+    ///
+    /// If one matches the prefix (without `:`) and the rest of the target are
+    /// returned.
+    pub fn matches<'t, TD2: TermData>(
+        &'t self,
+        target: &'t Iri<TD2>,
+    ) -> PrologMatch<'t, impl 't + Iterator<Item = char>> {
+        if let Some((base, _)) = &self.base {
+            if let Some(iter) = target.match_ns(base) {
+                return PrologMatch::Base(iter);
+            }
+        }
+
+        if let Some(matched) = self.prefixes.iter().find_map(|(p, ns)| {
+            let ns = ns.clone().into();
+            target
+                .match_ns(&ns)
+                .map(|iter| PrologMatch::Prefix(p, iter))
+        }) {
+            matched
+        } else {
+            PrologMatch::NoMatch
+        }
+    }
+
+    /// Resolves against the base IRI or returns unchanged if no base IRI is
+    /// set.
+    pub fn resolve<'i, I, O>(&self, other: &'i I) -> O
+    where
+        IriParsed<'td>: Resolve<&'i I, O>,
+        I: Clone,
+        O: From<I>,
+    {
+        if let Some((_, base)) = self.base {
+            base.resolve(other)
+        } else {
+            other.clone().into()
+        }
     }
 }
